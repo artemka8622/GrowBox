@@ -66,6 +66,21 @@ String command_status = "/status";
 String command_set = "/set";
 String command_pump_timer = "/set_pump_timer";
 String command_on_timer = "/set_on_timer";
+/*
+status - узнать статус
+light1on - включить свет
+light1off - включить свет
+light2on - включить свет
+light2off - включить свет
+pump1on - включить свет
+pump1off - включить свет
+pump2on - включить свет
+pump2off - включить свет
+set - установить время в часах set 1 6 18(6 света 18 тьмы)
+set_pump_timer - время включение насосос сек. /set_pump_timer 60
+set_on_timer - установить текущий таймер мин. set_on_timer 1 0 (установить в позицию 0)
+*/
+
 
 int chat_ids[10] = {294499886,0,0,0,0,0,0,0,0,0};
 
