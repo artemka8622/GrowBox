@@ -61,7 +61,6 @@ String command_ligth2_off = "/light2off";
 String command_pump1_on = "/pump1on";
 String command_pump1_off = "/pump1off";
 String command_pump2_on = "/pump2on";
-String command_pump2_off = "/pump2off";
 String command_status = "/status";
 String command_set = "/set";
 String command_pump_timer = "/set_pump_timer";
@@ -76,15 +75,16 @@ int curr_millis = 0;
 int start_millis = 0;
 int delta_millis = 0;
 
-
 /*+++++++++++++ Инициализация НАЧАЛО+++++++++++++++++++++++*/
 void setup() {
-  EEPROM.begin(512);
-    // initialize the Serial
   Serial.begin(115200);
+  EEPROM.begin(512);
+  delay(2000);
+
   Serial.println("Starting TelegramBot...");
-  //ReadSettings();
-  dht.begin();  
+  ReadSettings();
+
+  dht.begin();
 
   connectWiFi();
   myBot.setChatID(CHAT_ID);
@@ -95,14 +95,12 @@ void setup() {
   pinMode(LIGHT_2, OUTPUT); 
   pinMode(PUMP_1, OUTPUT); 
   pinMode(PUMP_2, OUTPUT); 
-  //Status();
 }
 
 int mode = 0; // 0- автоматический режим
 void loop() {
   curr_millis = (start_millis - delta_millis) + millis();
-  Serial.println("loop  " + String(curr_millis));  
-  
+    
   if(mode == 0){
     AutoMode();
   } else {  
@@ -119,10 +117,7 @@ void AutoMode(){
 }
 
 void connectWiFi() {
-  delay(2000);
-  Serial.begin(115200);
-  Serial.println();
-
+  Serial.println("Start connecting ");
   WiFi.begin(ssid, pass);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -137,8 +132,10 @@ void connectWiFi() {
 /*++++++++++++++++++++++++Переменные НАЧАЛО+++++++++++++++++++++++++++*/
 int period_milis_light1 = 6*60*60*1000;
 int period_milis_light1_prev = 0;
+int cycle_period_minute_1 = 24;
 int period_milis_light2 = 6*60*60*1000;
 int period_milis_light2_prev = 0;
+int cycle_period_minute_2 = 24;
 int period_milis_pump1 = 24*60*60*1000;
 int flow_pump1 = 1*1000;
 int period_milis_pump1_prev = 0;
@@ -151,11 +148,12 @@ int save_timer = 0;
 
 /*+++++++++++++ Обработка НАЧАЛО+++++++++++++++++++++++*/
 byte depth = 0;
+
 void newMsg(FB_msg& msg) {
-  InlineMenu();    
-  CheckCommand2(msg.text);
+  CheckCommand2(msg.data);
   CheckCommand(msg.text, chat_ids[0]);
-  Serial.println(msg.text);
+  InlineMenu(); 
+  Serial.println("Recive command - " + msg.text + msg.data);
 }
 
 void InlineMenu(){
@@ -232,28 +230,41 @@ void CheckCommand2(String callbackQueryData){
   } else if (callbackQueryData.equals(VEGA_CALLBACK)) {
     period_milis_light1 = 8 * 60 * 60 * 1000;
     period_milis_light2 =  8 * 60 * 60 * 1000;
+    cycle_period_minute_1 = 24 * 60 * 1000;
+    cycle_period_minute_2 = 24 * 60 * 1000;
+    SaveSettings();
   } else if (callbackQueryData.equals(BLOOM_CALLBACK)) {
     period_milis_light1 = 12 * 60 * 60 * 1000;
     period_milis_light2 =  12 * 60 * 60 * 1000;
+    cycle_period_minute_1 = 24 * 60 * 1000;
+    cycle_period_minute_2 = 24 * 60 * 1000;
+    SaveSettings();
   } else if (callbackQueryData.equals(FACTOR_1)) {
     cycle_factor = 1;  
+    SaveSettings();
   }
   else if (callbackQueryData.equals(FACTOR_2)) {
     cycle_factor = 2;
+    SaveSettings();
   } else if (callbackQueryData.equals(FACTOR_3)) {
     cycle_factor = 3;
+    SaveSettings();
   }
   else if (callbackQueryData.equals(CAHNGE_PUMP)) {
     next_cycle_copot = 1;
+    SaveSettings();
   }
     else if (callbackQueryData.equals(BEGIN_COPMPOT)) {
     next_cycle_copot = 0;
+    SaveSettings();
   }
   else if (callbackQueryData.equals(AUTO_MODE)) {
     mode = 0;
+    SaveSettings();
   }
   else if (callbackQueryData.equals(MANUAL_MODE)) {
     mode = 1;
+    SaveSettings();
   }
 }
 
@@ -278,7 +289,8 @@ void SetOnTimerCommand(String command){
     else if(timer == "3"){
       int next_start = t1 * 60 * 1000;
       period_milis_pump1_prev = curr_millis - next_start;
-    } 
+    }
+    SaveSettings();
 }
 
 void SetPumpTimerCommand(String command){
@@ -287,6 +299,7 @@ void SetPumpTimerCommand(String command){
     String timer_off = command.substring(firstClosingBracket + 1);
     int t2 =  timer_off.toInt();
     flow_pump1 = t2 * 1000;    
+    SaveSettings();
 }
 
 void SetCommand(String command){
@@ -300,15 +313,18 @@ void SetCommand(String command){
     int t1 =  timer_on.toInt();
     int t2 =  timer_off.toInt();
     if(timer == "1"){
-      period_milis_light1 = t1 * 60 * 60 * 1000;
+      period_milis_light1 = t1  * 60 * 1000;
+      cycle_period_minute_1 = t1 + t2;
     }
     else if(timer == "2"){
-      period_milis_light2 = t1 * 60 * 60 * 1000;
+      period_milis_light2 = t1  * 60 * 1000;
+      cycle_period_minute_2 = t1 + t2;
     }
     else if(timer == "3"){
-      period_milis_pump1 = t1 * 60 * 60 * 1000;
+      period_milis_pump1 = t1 * 60 * 1000;
       flow_pump1 = t2 * 1000;
-    }
+    }    
+    SaveSettings();
 }
 
 String GetStatus(){
@@ -325,7 +341,7 @@ String GetStatus(){
   int remain_time1 = __millis - period_milis_light1_prev;
   if(remain_time1 > period_milis_light1)
   {
-    remain_time1 = 24*60*60*1000 - remain_time1;
+    remain_time1 = cycle_period_minute_1 * 60 * 1000 - remain_time1;
   }else{
     remain_time1 = period_milis_light1 - remain_time1;
   }
@@ -333,7 +349,7 @@ String GetStatus(){
   int remain_time2 = __millis - period_milis_light2_prev;
   if(remain_time2 > period_milis_light2)
   {
-    remain_time2 = 24*60*60*1000 - remain_time2;
+    remain_time2 = cycle_period_minute_2 * 60 * 1000 - remain_time2;
   }else{
     remain_time2 = period_milis_light2 - remain_time2;
   }
@@ -350,14 +366,13 @@ String GetStatus(){
   String temp = String("темп: "  ) + String(t);
   String hum = String("влаж: "  ) +  String(h);
   
-  return String("Текущий статус")+ String("\r\n") + status_1 + String("\r\n") + status_2 + String("\r\n") + String(pump_1) + String("\r\n") + hum + temp + String("\r\n");
+  return String("Текущий статус ")+ String("\r\n") + status_1 + String("\r\n") + status_2 + String("\r\n") + String(pump_1) + String("\r\n") + hum + "  " + temp + String("\r\n");
 }
 
 void StatusForChat(int chat_id_1){
   String statusdevice = GetStatus();
   LogToTelegrammForChat(statusdevice, CHAT_ID);
-  Serial.println("Текущий статус" + statusdevice );
-  //SaveSettings();
+  Serial.println("Текущий статус " + statusdevice );
 }
 
 void LogToTelegrammForChat(String  message, String chat_id){
@@ -395,7 +410,7 @@ void PeriodLight1(){
         LogToTelegramm("Включен свет");
     }
   }  
-  if(calc_time > 24 *60 *60 * 1000){
+  if(calc_time > cycle_period_minute_1 * 60 * 1000){
     period_milis_light1_prev = curr_millis;
   }
 }
@@ -419,7 +434,7 @@ void PeriodLight2(){
         LogToTelegramm("Включена вентиляция");
     }
   }  
-  if(calc_time > 24 *60 *60 * 1000){
+  if(calc_time > cycle_period_minute_2 * 60 * 1000){
     period_milis_light2_prev = curr_millis;
   }
 }
@@ -486,76 +501,79 @@ String GetPumpName(){
 
 /*+++++++++++++ Настройки  НАЧАЛО+++++++++++++++++++++++*/
 void SaveSettings(){
+  Serial.println("SaveSettings ..."); 
   int cur_poss_memory = 0;
-  EEPROM.put(0, period_milis_light1_prev);  
-  cur_poss_memory += sizeof(period_milis_light1_prev);
-  EEPROM.put(cur_poss_memory, period_milis_light2_prev); 
+  EEPROM.put(cur_poss_memory, period_milis_light1);  
 
-  cur_poss_memory += sizeof(period_milis_light2_prev);
-  EEPROM.put(cur_poss_memory, period_milis_light1); 
-
-    cur_poss_memory += sizeof(period_milis_light1);
+  cur_poss_memory += sizeof(period_milis_light1);
+  Serial.println("cur_poss_memory " + String(cur_poss_memory)); 
   EEPROM.put(cur_poss_memory, period_milis_light2); 
 
-    cur_poss_memory += sizeof(period_milis_light2);
+  cur_poss_memory += sizeof(period_milis_light2);
+  Serial.println("cur_poss_memory " + String(cur_poss_memory)); 
+  EEPROM.put(cur_poss_memory, cycle_period_minute_1); 
+
+  cur_poss_memory += sizeof(cycle_period_minute_1);
+  Serial.println("cur_poss_memory " + String(cur_poss_memory)); 
+  EEPROM.put(cur_poss_memory, cycle_period_minute_2); 
+
+  cur_poss_memory += sizeof(cycle_period_minute_2);
+  Serial.println("cur_poss_memory " + String(cur_poss_memory)); 
   EEPROM.put(cur_poss_memory, period_milis_pump1); 
 
-    cur_poss_memory += sizeof(period_milis_pump1);
-  EEPROM.put(cur_poss_memory, period_milis_pump1_prev); 
-
-  cur_poss_memory += sizeof(period_milis_pump1_prev);
+  cur_poss_memory += sizeof(period_milis_pump1);
+  Serial.println("cur_poss_memory " + String(cur_poss_memory)); 
   EEPROM.put(cur_poss_memory, flow_pump1);
   
   cur_poss_memory += sizeof(flow_pump1);
-  EEPROM.put(cur_poss_memory, chat_ids[0]); 
+  Serial.println("cur_poss_memory " + String(cur_poss_memory)); 
+  EEPROM.put(cur_poss_memory, cycle_factor); 
 
-  cur_poss_memory += sizeof(chat_ids[0]);
-  EEPROM.put(cur_poss_memory, chat_ids[1]); 
-
-  start_millis = curr_millis;
-  delta_millis = millis();
-  
-  cur_poss_memory += sizeof(chat_ids[1]);
-  EEPROM.put(cur_poss_memory, start_millis); 
-  
-  Serial.println(" Сохраняем настройки текущее время " + String(start_millis/(60*1000))  );
-   EEPROM.commit();
-  
+  delay(500);
+  if (EEPROM.commit()) {
+    Serial.println("EEPROM successfully committed");
+  } else {
+    Serial.println("ERROR! EEPROM commit failed");
+  }
+  PrintSettings();
 }
 
 void ReadSettings(){
   int cur_poss_memory = 0;
-
-  EEPROM.get(0, period_milis_light1_prev);  
-
-  cur_poss_memory += sizeof(period_milis_light1_prev);
-  EEPROM.get(cur_poss_memory, period_milis_light2_prev); 
-
-  cur_poss_memory += sizeof(period_milis_light2_prev);
-  EEPROM.get(cur_poss_memory, period_milis_light1); 
-
-    cur_poss_memory += sizeof(period_milis_light1);
-  EEPROM.get(cur_poss_memory, period_milis_light2); 
-
-    cur_poss_memory += sizeof(period_milis_light2);
-  EEPROM.get(cur_poss_memory, period_milis_pump1); 
-
-    cur_poss_memory += sizeof(period_milis_pump1);
-  EEPROM.get(cur_poss_memory, period_milis_pump1_prev);
-
-  cur_poss_memory += sizeof(period_milis_pump1_prev);
-  EEPROM.get(cur_poss_memory, flow_pump1);
   
+  Serial.println("ReadSettings ..."); 
+  EEPROM.get(cur_poss_memory, period_milis_light1);  
+
+  cur_poss_memory += sizeof(period_milis_light1);
+  EEPROM.get(cur_poss_memory, period_milis_light2);  
+
+  cur_poss_memory += sizeof(period_milis_light2);
+  EEPROM.get(cur_poss_memory, cycle_period_minute_1);  
+
+  cur_poss_memory += sizeof(cycle_period_minute_1);
+  EEPROM.get(cur_poss_memory, cycle_period_minute_2);  
+
+  cur_poss_memory += sizeof(cycle_period_minute_2);
+  EEPROM.get(cur_poss_memory, period_milis_pump1);  
+
+  cur_poss_memory += sizeof(period_milis_pump1);
+  EEPROM.get(cur_poss_memory, flow_pump1);  
+
   cur_poss_memory += sizeof(flow_pump1);
-  //EEPROM.get(cur_poss_memory, chat_ids[0]); 
+  EEPROM.get(cur_poss_memory, cycle_factor);  
 
-  cur_poss_memory += sizeof(chat_ids[0]);
-  //EEPROM.get(cur_poss_memory, chat_ids[1]); 
+  PrintSettings();
+}
 
-  cur_poss_memory += sizeof(chat_ids[1]);
-  EEPROM.get(cur_poss_memory, curr_millis); 
-  Serial.println("Читаем настройки, время " + String((curr_millis/(60*1000))));
-
+void PrintSettings()
+{
+  Serial.println("period_milis_light1 " + String(period_milis_light1));
+  Serial.println("period_milis_light2 " + String(period_milis_light2));
+  Serial.println("cycle_period_minute_1 " + String(cycle_period_minute_1));
+  Serial.println("cycle_period_minute_2 " + String(cycle_period_minute_2));
+  Serial.println("period_milis_pump1 " + String(period_milis_pump1));
+  Serial.println("flow_pump1 " + String(flow_pump1));
+  Serial.println("cycle_factor " + String(cycle_factor));
 }
 
 void UpdateChat(int chat_id_1){
