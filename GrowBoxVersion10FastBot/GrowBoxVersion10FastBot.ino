@@ -61,6 +61,7 @@ String command_ligth2_off = "/light2off";
 String command_pump1_on = "/pump1on";
 String command_pump1_off = "/pump1off";
 String command_pump2_on = "/pump2on";
+String command_pump2_off = "/pump2off";
 String command_status = "/status";
 String command_set = "/set";
 String command_pump_timer = "/set_pump_timer";
@@ -78,7 +79,10 @@ int delta_millis = 0;
 /*+++++++++++++ Инициализация НАЧАЛО+++++++++++++++++++++++*/
 void setup() {
   Serial.begin(115200);
+  Serial.println("Setup...");
+  Serial.println("EEPROM begin");  
   EEPROM.begin(512);
+  Serial.println("EEPROM end");
   delay(2000);
 
   Serial.println("Starting TelegramBot...");
@@ -98,12 +102,16 @@ void setup() {
 }
 
 int mode = 0; // 0- автоматический режим
+int startTime = 24 * 60 * 60 * 1000;
+
 void loop() {
-  curr_millis = (start_millis - delta_millis) + millis();
+  curr_millis = startTime + millis();
     
   if(mode == 0){
     AutoMode();
-  } else {  
+    } 
+  else {  
+
   }
   
   myBot.tick();
@@ -131,14 +139,14 @@ void connectWiFi() {
 
 /*++++++++++++++++++++++++Переменные НАЧАЛО+++++++++++++++++++++++++++*/
 int period_milis_light1 = 6*60*60*1000;
-int period_milis_light1_prev = 0;
-int cycle_period_minute_1 = 24;
-int period_milis_light2 = 6*60*60*1000;
-int period_milis_light2_prev = 0;
-int cycle_period_minute_2 = 24;
+int period_milis_light1_prev = startTime;
+int cycle_period_minute_1 = 24 * 60;
+int period_milis_light2 = 59 * 60 *1000;
+int period_milis_light2_prev = startTime;
+int cycle_period_minute_2 = 60;
 int period_milis_pump1 = 24*60*60*1000;
 int flow_pump1 = 1*1000;
-int period_milis_pump1_prev = 0;
+int period_milis_pump1_prev = startTime;
 int cycle_factor = 1;
 int next_cycle_copot = 1;
 int save_timer = 0;
@@ -229,15 +237,20 @@ void CheckCommand2(String callbackQueryData){
     digitalWrite(PUMP_2, 0);
   } else if (callbackQueryData.equals(VEGA_CALLBACK)) {
     period_milis_light1 = 8 * 60 * 60 * 1000;
-    period_milis_light2 =  8 * 60 * 60 * 1000;
-    cycle_period_minute_1 = 24 * 60 * 1000;
-    cycle_period_minute_2 = 24 * 60 * 1000;
+    period_milis_light2 =  59 * 60 * 1000;
+    cycle_period_minute_1 = 24 * 60;
+    cycle_period_minute_2 = 60;
+    period_milis_pump1 = 24*60*60*1000;
+    flow_pump1 = 1*1000;
+    
     SaveSettings();
   } else if (callbackQueryData.equals(BLOOM_CALLBACK)) {
     period_milis_light1 = 12 * 60 * 60 * 1000;
-    period_milis_light2 =  12 * 60 * 60 * 1000;
-    cycle_period_minute_1 = 24 * 60 * 1000;
-    cycle_period_minute_2 = 24 * 60 * 1000;
+    period_milis_light2 =  59 * 60 * 1000;
+    cycle_period_minute_1 = 24 * 60;
+    cycle_period_minute_2 = 60;
+    period_milis_pump1 = 24*60*60*1000;
+    flow_pump1 = 1*1000;
     SaveSettings();
   } else if (callbackQueryData.equals(FACTOR_1)) {
     cycle_factor = 1;  
@@ -284,7 +297,7 @@ void SetOnTimerCommand(String command){
     else if(timer == "2"){
       int next_start = t1 * 60 * 1000;
       period_milis_light2_prev = curr_millis - next_start;
-      Serial.println("Set on timer 1 " + String(period_milis_light2_prev)); 
+      Serial.println("Set on timer 2 " + String(period_milis_light2_prev)); 
     }
     else if(timer == "3"){
       int next_start = t1 * 60 * 1000;
@@ -338,25 +351,24 @@ String GetStatus(){
   int __millis = curr_millis;
 
   // считаем сколько осталось работы текущего режива
-  int remain_time1 = __millis - period_milis_light1_prev;
-  if(remain_time1 > period_milis_light1)
+  int time_from_begin_cycle_1 = __millis - period_milis_light1_prev;
+  int remain_time_1 = period_milis_light1 - time_from_begin_cycle_1;
+  Serial.println(String(__millis) + "  " + String(period_milis_light1_prev) + "  " + String(period_milis_light1));
+  if(time_from_begin_cycle_1 > period_milis_light1)
   {
-    remain_time1 = cycle_period_minute_1 * 60 * 1000 - remain_time1;
-  }else{
-    remain_time1 = period_milis_light1 - remain_time1;
+    remain_time_1 = cycle_period_minute_1 * 60 * 1000 - time_from_begin_cycle_1;
   }
   
-  int remain_time2 = __millis - period_milis_light2_prev;
-  if(remain_time2 > period_milis_light2)
+  int time_from_begin_cycle_2 = __millis - period_milis_light2_prev;
+  int remain_time_2 = period_milis_light2 - time_from_begin_cycle_2;
+  if(time_from_begin_cycle_2 > period_milis_light2)
   {
-    remain_time2 = cycle_period_minute_2 * 60 * 1000 - remain_time2;
-  }else{
-    remain_time2 = period_milis_light2 - remain_time2;
+    remain_time_2 = cycle_period_minute_2 * 60 * 1000 - time_from_begin_cycle_2;
   }
   
-  String status_1 =  String("Свет: ") + GetStatusDevice(controlLight1)  + "осталось " + String(remain_time1/(1000*60)) +" мин.";
+  String status_1 =  String("Свет:") + GetStatusDevice(controlLight1) + " прошло " +  String(time_from_begin_cycle_1/(1000*60))  + " мин., осталось " + String(remain_time_1/(1000*60)) +" мин. " +  String(cycle_period_minute_1) ;
     
-  String status_2 =  String("Вентиляция: ") + GetStatusDevice(controlLight2) + " осталось " + String(remain_time2/(1000*60)) +" мин.";
+  String status_2 =  String("мешалка:") + GetStatusDevice(controlLight2)  + " прошло " +  String(time_from_begin_cycle_2/(1000*60))  + " мин., осталось " + String(remain_time_2/(1000*60)) +" мин. " +  String(cycle_period_minute_2);
 
    String name_pump = GetPumpName();
    String pump_1 = String("Полив: " ) +  name_pump + ", ост. "
@@ -423,7 +435,7 @@ void PeriodLight2(){
       if(controlLight2 == 1)
       {
         digitalWrite(LIGHT_2, 0);
-        LogToTelegramm("Выключена вентиляция");   
+        LogToTelegramm("Выключена мешалка");   
       }     
   }
   else
@@ -431,7 +443,7 @@ void PeriodLight2(){
     if(controlLight2 == 0)
     {
         digitalWrite(LIGHT_2, 1);
-        LogToTelegramm("Включена вентиляция");
+        LogToTelegramm("Включена мешалка");
     }
   }  
   if(calc_time > cycle_period_minute_2 * 60 * 1000){
